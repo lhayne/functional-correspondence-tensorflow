@@ -1,0 +1,9 @@
+name: fct
+dependencies:
+- python=3
+- jupyter
+- tensorflow-gpu
+- matplotlib
+- numpy 
+- pandas
+- tensorflow-datasets
