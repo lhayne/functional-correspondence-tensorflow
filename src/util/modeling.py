@@ -22,10 +22,10 @@ def prediction_agreement(y1_predictions,y2_predictions):
     Calculates the agreement between two network predictions.
     """
     y1_predictions,y2_predictions = tf.argmax(y1_predictions,axis=1),tf.argmax(y2_predictions,axis=1)
-    num_agreement = tf.math.count_nonzero(y1_predictions==y2_predictions)
+    num_agreement = tf.math.count_nonzero(y1_predictions==y2_predictions,dtype=tf.dtypes.float32)
     return num_agreement/tf.size(y1_predictions, out_type=tf.dtypes.float32)
 
-def lin_cka_dist_2(A, B):
+def lin_cka_dist_2(A, B, center=True):
     """
     Computes Linear CKA distance bewteen representations A and B
     based on the reformulation of the Frobenius norm term from Kornblith et al. (2018)
@@ -41,12 +41,50 @@ def lin_cka_dist_2(A, B):
     similarity = np.linalg.norm(B @ A.T, ord="fro") ** 2
     normalization = np.linalg.norm(A @ A.T, ord="fro") * np.linalg.norm(B @ B.T, ord="fro")
     """
+    if center:
+        A = tf.subtract(A, tf.reduce_mean(A,axis=0))
+        B = tf.subtract(A, tf.reduce_mean(B,axis=0))
+        
     similarity = tf.linalg.trace(tf.matmul(tf.matmul(A, tf.transpose(A)), tf.matmul(B, tf.transpose(B))))
     normalization = tf.multiply(tf.norm(tf.matmul(A, tf.transpose(A)), ord='fro',axis=(0,1)), 
                                 tf.norm(tf.matmul(B, tf.transpose(B)), ord='fro',axis=(0,1)))
     distance = tf.subtract(1.0, tf.divide(similarity, normalization + 1e-10))
 
     return distance
+
+
+def procrustes_2(A, B):
+    """
+    Computes Procrustes distance bewteen representations A and B
+    for when |neurons| >> |examples| and A.T @ B too large to fit in memory.
+    Based on:
+         np.linalg.norm(A.T @ B, ord="nuc") == np.sum(np.sqrt(np.linalg.eig(((A @ A.T) @ (B @ B.T)))[0]))
+    
+    Parameters
+    ----------
+    A : examples x neurons
+    B : examples x neurons
+
+    Original Code
+    -------------    
+    nuc = np.linalg.norm(A @ B.T, ord="nuc")  # O(p * p * n)
+    """
+    A_centered = tf.subtract(A, tf.reduce_mean(A,axis=0))
+    A_normalized = tf.divide(A_centered, tf.norm(A, ord='fro',axis=(0,1))+1e-10)
+
+    B_centered = tf.subtract(B, tf.reduce_mean(B,axis=0))
+    B_normalized = tf.divide(B_centered, tf.norm(B, ord='fro',axis=(0,1))+1e-10)
+
+    A_sq_frob = tf.math.reduce_sum(tf.pow(A_normalized, 2))
+    B_sq_frob = tf.math.reduce_sum(tf.pow(B_normalized, 2))
+    eig = tf.linalg.eig(tf.matmul(
+        tf.matmul(A_normalized, tf.transpose(A_normalized)), 
+        tf.matmul(B_normalized, tf.transpose(B_normalized)))
+        )[0]
+    nuc = tf.math.reduce_sum(tf.math.sqrt(tf.math.abs(eig)))
+    # nuc = tf.math.reduce_sum(tf.linalg.svd(tf.matmul(A_normalized, 
+    #                                                  tf.transpose(B_normalized)), compute_uv=False))
+    return A_sq_frob + B_sq_frob - 2 * nuc
 
 
 class HModel(tf.keras.Model):
@@ -116,7 +154,7 @@ class HModel(tf.keras.Model):
                 * self.temperature**2
             )
 
-            loss = (self.alpha * ((y1_loss + y2_loss) / 2.0) + (1 - self.alpha) * distillation_loss) - self.beta * rep_loss
+            loss = (self.alpha * ((y1_loss + y2_loss) / 2.0) + (1 - self.alpha) * distillation_loss) - self.beta * tf.math.log(rep_loss + 1e-10)
 
         # Compute gradients
         trainable_vars = self.trainable_variables
