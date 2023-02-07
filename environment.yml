@@ -2,8 +2,14 @@ name: fct
 dependencies:
 - python=3
 - jupyter
-- tensorflow-gpu
+- tensorflow
 - matplotlib
 - numpy 
 - pandas
 - tensorflow-datasets
+- datashader 
+- bokeh 
+- holoviews 
+- colorcet 
+- scikit-image
+- umap-learn

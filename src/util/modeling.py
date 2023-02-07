@@ -43,8 +43,7 @@ def lin_cka_dist_2(A, B, center=True):
     """
     if center:
         A = tf.subtract(A, tf.reduce_mean(A,axis=0))
-        B = tf.subtract(A, tf.reduce_mean(B,axis=0))
-        
+        B = tf.subtract(B, tf.reduce_mean(B,axis=0))
     similarity = tf.linalg.trace(tf.matmul(tf.matmul(A, tf.transpose(A)), tf.matmul(B, tf.transpose(B))))
     normalization = tf.multiply(tf.norm(tf.matmul(A, tf.transpose(A)), ord='fro',axis=(0,1)), 
                                 tf.norm(tf.matmul(B, tf.transpose(B)), ord='fro',axis=(0,1)))
@@ -69,7 +68,7 @@ def procrustes_2(A, B):
     -------------    
     nuc = np.linalg.norm(A @ B.T, ord="nuc")  # O(p * p * n)
     """
-    A_centered = tf.subtract(A, tf.reduce_mean(A,axis=0))
+    A_centered = tf.subtract(A, tf.reduce_mean(A,axis=0,keepdims=True))
     A_normalized = tf.divide(A_centered, tf.norm(A, ord='fro',axis=(0,1))+1e-10)
 
     B_centered = tf.subtract(B, tf.reduce_mean(B,axis=0))
@@ -77,13 +76,13 @@ def procrustes_2(A, B):
 
     A_sq_frob = tf.math.reduce_sum(tf.pow(A_normalized, 2))
     B_sq_frob = tf.math.reduce_sum(tf.pow(B_normalized, 2))
-    eig = tf.linalg.eig(tf.matmul(
-        tf.matmul(A_normalized, tf.transpose(A_normalized)), 
-        tf.matmul(B_normalized, tf.transpose(B_normalized)))
-        )[0]
-    nuc = tf.math.reduce_sum(tf.math.sqrt(tf.math.abs(eig)))
-    # nuc = tf.math.reduce_sum(tf.linalg.svd(tf.matmul(A_normalized, 
-    #                                                  tf.transpose(B_normalized)), compute_uv=False))
+    # eig = tf.linalg.eig(tf.matmul(
+    #     tf.matmul(A_normalized, tf.transpose(A_normalized)), 
+    #     tf.matmul(B_normalized, tf.transpose(B_normalized)))
+    #     )[0]
+    # nuc = tf.math.reduce_sum(tf.math.sqrt(tf.math.abs(eig)))
+    nuc = tf.math.reduce_sum(tf.linalg.svd(tf.matmul(A_normalized, 
+                                                     tf.transpose(B_normalized)), compute_uv=False))
     return A_sq_frob + B_sq_frob - 2 * nuc
 
 
