@@ -47,10 +47,10 @@ def main():
                                      'distillation_loss','test_distillation_loss',
                                      'train_agreement','test_agreement','fog_agreement',
                                      'stripe_agreement','blur_agreement','rotate_agreement',
-                                     'epochs'])
+                                     'epochs','A_test_selectivity','B_test_selectivity'])
 
-    for m in range(1):
-        for beta in list(np.logspace(-10,-1,10)):
+    for m in range(20):
+        for beta in list(np.logspace(-10,1,10)):
             print('BETA',beta)
             model_A = tf.keras.models.load_model('../models/lenet_iteration_'+str(m))
             print(model_A.layers)
@@ -75,7 +75,7 @@ def main():
                 optimizer=tf.keras.optimizers.Adam(),
                 y1_metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
                 y2_metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
-                rep_loss_fn=modeling.lin_cka_dist_2,
+                rep_loss_fn=modeling.selectivity_index_difference,
                 y1_loss_fn=tf.keras.losses.SparseCategoricalCrossentropy(), 
                 y2_loss_fn=tf.keras.losses.SparseCategoricalCrossentropy(),
                 distillation_loss_fn=tf.keras.losses.KLDivergence(),
@@ -88,7 +88,7 @@ def main():
                                             monitor='val_loss',
                                             mode='min',
                                             min_delta=0,
-                                            patience=20,
+                                            patience=50,
                                             restore_best_weights=True,
                     )])
 
@@ -111,24 +111,7 @@ def main():
             rotate_agreement = modeling.prediction_agreement(y1_predictions,y2_predictions).numpy()
 
             history = history.history
-            json.dump(history,open('../histories/lenet_procrustes_iteration_'+str(m)+'_beta_'+str(beta)+'.json','w'))
-
-            best_epoch = np.argmin(history['val_loss'])
-            stats.loc[len(stats)] = [m,beta,
-                                    history['rep_loss'][best_epoch],
-                                    history['val_rep_loss'][best_epoch],
-                                    history['val_y1_sparse_categorical_accuracy'][best_epoch],
-                                    history['val_y2_sparse_categorical_accuracy'][best_epoch],
-                                    history['distillation_loss'][best_epoch],
-                                    history['val_distillation_loss'][best_epoch],
-                                    train_agreement,
-                                    test_agreement,
-                                    fog_agreement,
-                                    stripe_agreement,
-                                    blur_agreement,
-                                    rotate_agreement,
-                                    best_epoch]
-            stats.to_csv('../summary_stats/lenet_cka_stats.csv')
+            json.dump(history,open('../histories/lenet_selectivity_iteration_'+str(m)+'_beta_'+str(beta)+'.json','w'))
 
             A_train_activations = model_A1.predict(x_train)
             A_test_activations = model_A1.predict(x_test)
@@ -144,32 +127,54 @@ def main():
             B_blur_activations = model_B1.predict(x_blur)
             B_rotate_activations = model_B1.predict(x_rotate)
 
+            A_selectivity = modeling.selectivity_index(A_test_activations,tf.cast(y_test,tf.int32)).numpy()
+            B_selectivity = modeling.selectivity_index(B_test_activations,tf.cast(y_test,tf.int32)).numpy()
+
+            best_epoch = np.argmin(history['val_loss'])
+            stats.loc[len(stats)] = [m,beta,
+                                    history['rep_loss'][best_epoch],
+                                    history['val_rep_loss'][best_epoch],
+                                    history['val_y1_sparse_categorical_accuracy'][best_epoch],
+                                    history['val_y2_sparse_categorical_accuracy'][best_epoch],
+                                    history['distillation_loss'][best_epoch],
+                                    history['val_distillation_loss'][best_epoch],
+                                    train_agreement,
+                                    test_agreement,
+                                    fog_agreement,
+                                    stripe_agreement,
+                                    blur_agreement,
+                                    rotate_agreement,
+                                    best_epoch,
+                                    A_selectivity,
+                                    B_selectivity]
+            stats.to_csv('../summary_stats/lenet_selectivity_stats.csv')
+
             # Save activations
             pickle.dump({'activations':A_train_activations,'labels':y_train},
-                       open('../activations/cka/A_train_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/A_train_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':A_test_activations,'labels':y_test},
-                       open('../activations/cka/A_test_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/A_test_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':A_fog_activations,'labels':y_fog},
-                       open('../activations/cka/A_fog_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/A_fog_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':A_stripe_activations,'labels':y_stripe},
-                       open('../activations/cka/A_stripe_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/A_stripe_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':A_blur_activations,'labels':y_blur},
-                       open('../activations/cka/A_blur_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/A_blur_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':A_rotate_activations,'labels':y_rotate},
-                       open('../activations/cka/A_rotate_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/A_rotate_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
 
             pickle.dump({'activations':B_train_activations,'labels':y_train},
-                       open('../activations/cka/B_train_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/B_train_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':B_test_activations,'labels':y_test},
-                       open('../activations/cka/B_test_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/B_test_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':B_fog_activations,'labels':y_fog},
-                       open('../activations/cka/B_fog_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/B_fog_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':B_stripe_activations,'labels':y_stripe},
-                       open('../activations/cka/B_stripe_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/B_stripe_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':B_blur_activations,'labels':y_blur},
-                       open('../activations/cka/B_blur_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/B_blur_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
             pickle.dump({'activations':B_rotate_activations,'labels':y_rotate},
-                       open('../activations/cka/B_rotate_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
+                       open('../activations/selectivity/B_rotate_iteration_'+str(m)+'_beta_'+str(beta)+'.pkl','wb'))
 
             del model_A
             del model_A1
